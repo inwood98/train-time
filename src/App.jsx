@@ -169,16 +169,14 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
 
   let base;
   if (jumpHour !== null) {
-    const hourServices = services.filter((s) => new Date(s.scheduled).getHours() === jumpHour);
-    const firstAtHour = hourServices.length ? hourServices[0] : null;
-    base = firstAtHour
-      ? services.filter((s) => new Date(s.scheduled).getTime() >= new Date(firstAtHour.scheduled).getTime())
-      : [];
+    base = services.filter((s) => new Date(s.scheduled).getHours() === jumpHour);
   } else {
     base = services.filter((s) => !alreadyDeparted(s));
   }
   let list = destFilter ? base.filter((s) => s.destination === destFilter) : base;
-  list = list.slice(0, 3);
+  const MAX_ROWS = 200;
+  const truncated = list.length > MAX_ROWS;
+  list = list.slice(0, MAX_ROWS);
 
   const legs = list.map((s) =>
     s.filterArrival ? new Date(s.filterArrival).getTime() - effectiveTime(s) : null
@@ -221,7 +219,7 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
           {hours.length > 1 && (
             <div className="tool">
               <button className={`tool-btn${panel === "time" ? " open" : ""}`} onClick={() => toggle("time")}>
-                <span>{jumpHour === null ? "Now" : `After ${two(jumpHour)}:00`}</span>
+                <span>{jumpHour === null ? "Now" : `${two(jumpHour)}:00`}</span>
                 <span className="chev">▾</span>
               </button>
               <Picker open={panel === "time"}>
@@ -277,10 +275,18 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
         <span className="col meta">Status · Plat · Depart</span>
       </div>
 
+      {list.length > 0 && (
+        <div className="rowcount">
+          {list.length} departure{list.length === 1 ? "" : "s"}
+          {truncated ? ` (first ${MAX_ROWS} shown)` : ""}
+          {jumpHour !== null ? ` · ${two(jumpHour)}:00–${two(jumpHour + 1)}:00` : " · rest of day"}
+        </div>
+      )}
+
       {list.length === 0 && (
         <div className="empty">
           {jumpHour !== null
-            ? `No ${destFilter ? destFilter + " " : ""}trains from ${two(jumpHour)}:00 onwards.`
+            ? `No ${destFilter ? destFilter + " " : ""}trains in the ${two(jumpHour)}:00 hour.`
             : `No upcoming trains to ${toName} in the next few hours. Service may have ended for the night.`}
         </div>
       )}
@@ -352,7 +358,7 @@ export default function App() {
           <span className="h1b">{to.name}</span>
         </h1>
         <p className="sub">
-          Next 3 departures · South Western Railway · data refreshes every 30 min
+          All departures · South Western Railway · data refreshes every 30 min
         </p>
 
         <div className="stations">

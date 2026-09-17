@@ -404,6 +404,13 @@ header h1 .arrow {
   color: var(--muted);
 }
 
+.rowcount {
+  padding: 8px 22px;
+  font-size: 12px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
 .message {
   padding: 48px 20px;
   text-align: center;
