@@ -119,7 +119,7 @@ function Row({ departure, index, toName, fastest }) {
     <div className={`row ${st.className}`}>
       <div className="cell num">{index + 1}</div>
       <div className="cell time">
-        <span className="mono">{scheduled}</span>
+        <span className="mono time-main">{scheduled}</span>
         {delayed && <span className="est mono">est {estimated}</span>}
       </div>
       <div className="cell to">
@@ -134,14 +134,10 @@ function Row({ departure, index, toName, fastest }) {
           )}
         </span>
       </div>
-      <div className="cell status">
+      <div className="cell meta">
         <span className={`chip ${st.className}`}>{st.label}</span>
-      </div>
-      <div className="cell platform">
-        {departure.platform ? <span className="mono">{departure.platform}</span> : "—"}
-      </div>
-      <div className="cell countdown">
-        {!departure.cancelled && <span className="mono">{countdown}</span>}
+        <span className="plat mono">{departure.platform ? `Plat ${departure.platform}` : "—"}</span>
+        {!departure.cancelled && <span className="mono countdown">{countdown}</span>}
       </div>
     </div>
   );
@@ -155,7 +151,13 @@ function Chip({ active, onClick, children }) {
   );
 }
 
+function Picker({ open, onPick }) {
+  if (!open) return null;
+  return <div className="picker">{onPick({ Chip })}</div>;
+}
+
 function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter }) {
+  const [panel, setPanel] = useState(null); // null | 'time' | 'dest'
   const services = sortByTime(data.services);
   const now = Date.now();
 
@@ -185,6 +187,16 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
   const minLeg = validLegs.length ? Math.min(...validLegs) : null;
   const showFastest = validLegs.length && new Set(validLegs.map((l) => Math.round(l / 60000))).size > 1;
 
+  const toggle = (p) => setPanel((cur) => (cur === p ? null : p));
+  const pickTime = (h) => {
+    setJumpHour(h);
+    setPanel(null);
+  };
+  const pickDest = (d) => {
+    setDestFilter(d);
+    setPanel(null);
+  };
+
   return (
     <div className="board">
       <div className="board-head">
@@ -204,29 +216,57 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
         </div>
       )}
 
-      {hours.length > 1 && (
-        <div className="chips">
-          <Chip active={jumpHour === null} onClick={() => setJumpHour(null)}>
-            Now
-          </Chip>
-          {hours.map((h) => (
-            <Chip key={h} active={jumpHour === h} onClick={() => setJumpHour(h)}>
-              {two(h)}:00
-            </Chip>
-          ))}
-        </div>
-      )}
+      {(hours.length > 1 || destinations.length > 1) && (
+        <div className="board-tools">
+          {hours.length > 1 && (
+            <div className="tool">
+              <button className={`tool-btn${panel === "time" ? " open" : ""}`} onClick={() => toggle("time")}>
+                <span>{jumpHour === null ? "Now" : `After ${two(jumpHour)}:00`}</span>
+                <span className="chev">▾</span>
+              </button>
+              <Picker open={panel === "time"}>
+                {({ Chip: C }) => (
+                  <>
+                    <C active={jumpHour === null} onClick={() => pickTime(null)}>
+                      Now
+                    </C>
+                    {hours.map((h) => (
+                      <C
+                        key={h}
+                        active={jumpHour === h}
+                        onClick={() => pickTime(h)}
+                      >
+                        {two(h)}:00{h === 0 ? " · next day" : ""}
+                      </C>
+                    ))}
+                  </>
+                )}
+              </Picker>
+            </div>
+          )}
 
-      {destinations.length > 1 && (
-        <div className="chips filters">
-          <Chip active={destFilter === null} onClick={() => setDestFilter(null)}>
-            All trains
-          </Chip>
-          {destinations.map((d) => (
-            <Chip key={d} active={destFilter === d} onClick={() => setDestFilter(d)}>
-              {d}
-            </Chip>
-          ))}
+          {destinations.length > 1 && (
+            <div className="tool">
+              <button className={`tool-btn${panel === "dest" ? " open" : ""}`} onClick={() => toggle("dest")}>
+                <span>{destFilter === null ? "All trains" : destFilter}</span>
+                <span className="chev">▾</span>
+              </button>
+              <Picker open={panel === "dest"}>
+                {({ Chip: C }) => (
+                  <>
+                    <C active={destFilter === null} onClick={() => pickDest(null)}>
+                      All trains
+                    </C>
+                    {destinations.map((d) => (
+                      <C key={d} active={destFilter === d} onClick={() => pickDest(d)}>
+                        {d}
+                      </C>
+                    ))}
+                  </>
+                )}
+              </Picker>
+            </div>
+          )}
         </div>
       )}
 
@@ -234,9 +274,7 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
         <span className="col num">#</span>
         <span className="col time">Time</span>
         <span className="col to">Destination</span>
-        <span className="col status">Status</span>
-        <span className="col platform">Plat</span>
-        <span className="col countdown">Depart</span>
+        <span className="col meta">Status · Plat · Depart</span>
       </div>
 
       {list.length === 0 && (

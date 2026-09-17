@@ -142,21 +142,78 @@ header h1 .arrow {
   font-size: 14px;
 }
 
-.chips {
+.board-tools {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
   padding: 12px 20px;
   border-bottom: 1px solid var(--line);
 }
 
-.chips.filters {
-  padding-top: 0;
-  padding-bottom: 12px;
+.tool {
+  position: relative;
+  flex: 1;
+  min-width: 170px;
+}
+
+.tool-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tool-btn .chev {
+  color: var(--muted);
+  font-size: 11px;
+  transition: transform 0.15s ease;
+}
+
+.tool-btn.open {
+  border-color: rgba(40, 208, 138, 0.5);
+}
+
+.tool-btn.open .chev {
+  transform: rotate(180deg);
+}
+
+.picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  padding: 12px;
+  background: #0e1613;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.picker .chip-btn {
+  padding: 10px 6px;
+  text-align: center;
 }
 
 .chip-btn {
-  padding: 5px 14px;
+  padding: 6px 14px;
   font-size: 12px;
   font-weight: 700;
   color: var(--muted);
@@ -219,9 +276,9 @@ header h1 .arrow {
 .cols,
 .row {
   display: grid;
-  grid-template-columns: 44px 110px 1fr 110px 60px 70px;
+  grid-template-columns: 40px 120px 1fr auto;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   padding: 0 20px;
 }
 
@@ -283,6 +340,29 @@ header h1 .arrow {
   margin-top: 2px;
 }
 
+.cell.meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.cell.meta .plat {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.cell.meta .countdown {
+  color: var(--accent);
+  min-width: 72px;
+  text-align: right;
+}
+
+.col.meta {
+  text-align: right;
+}
+
 .chip {
   display: inline-block;
   font-size: 12px;
@@ -290,6 +370,7 @@ header h1 .arrow {
   padding: 3px 10px;
   border-radius: 999px;
   text-align: center;
+  white-space: nowrap;
 }
 
 .chip.on-time {
@@ -315,15 +396,6 @@ header h1 .arrow {
 .chip.unknown {
   color: var(--muted);
   background: rgba(125, 145, 138, 0.15);
-}
-
-.cell.platform {
-  color: var(--text);
-}
-
-.cell.countdown {
-  color: var(--accent);
-  text-align: right;
 }
 
 .empty {
@@ -362,35 +434,115 @@ footer {
 }
 
 @media (max-width: 680px) {
+  .app {
+    padding: 20px 12px 16px;
+  }
+
+  header h1 {
+    font-size: 22px;
+  }
+
+  header .sub {
+    font-size: 12px;
+    margin-bottom: 16px;
+  }
+
+  header .stations {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 8px;
+    margin-bottom: 18px;
+  }
+
+  .station-field select {
+    width: 100%;
+    font-size: 14px;
+    padding: 10px 8px;
+  }
+
+  .stations .swap {
+    margin-top: 16px;
+    padding: 10px 12px;
+  }
+
   .cols {
     display: none;
   }
 
-  .cols,
   .row {
-    grid-template-columns: 30px 82px 1fr;
+    grid-template-columns: 82px 1fr;
     gap: 8px;
-    padding: 0 12px;
+    padding: 12px;
+    align-items: start;
   }
 
-  .row {
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-
-  .cell.status,
-  .cell.platform,
-  .cell.countdown {
-    grid-column: 2 / 4;
-    text-align: left;
-  }
-
-  .cell.countdown {
+  .cell.num {
     display: none;
+  }
+
+  .cell.time .time-main {
+    font-size: 18px;
+  }
+
+  .cell.meta {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    gap: 10px;
+    margin-top: 4px;
+    padding-top: 8px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  }
+
+  .cell.meta .countdown {
+    margin-left: auto;
   }
 
   .board-head {
     flex-direction: column;
     gap: 4px;
+  }
+
+  .board-tools {
+    padding: 12px;
+  }
+
+  .picker {
+    position: static;
+    grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+    max-height: 200px;
+    border: none;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    box-shadow: none;
+    padding: 10px 0 0;
+    margin-top: 8px;
+  }
+
+  .picker .chip-btn {
+    padding: 12px 6px;
+  }
+
+  .last {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .badge.fastest {
+    margin-left: 6px;
+    font-size: 9px;
+  }
+}
+
+@media (max-width: 420px) {
+  .row {
+    grid-template-columns: 74px 1fr;
+  }
+
+  .cell.to .dest {
+    font-size: 14px;
+  }
+
+  .calls {
+    font-size: 11px;
   }
 }
