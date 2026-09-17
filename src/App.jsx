@@ -124,6 +124,16 @@ function Row({ departure, index, callsAt }) {
 
 function Board({ data }) {
   const callsAt = data.filterStation?.locationName ?? data.departureStation?.locationName;
+
+  const now = Date.now();
+  const upcoming = (data.services ?? [])
+    .filter((s) => {
+      const scheduled = s.scheduled ? new Date(s.scheduled).getTime() : NaN;
+      const effective = s.estimated ? new Date(s.estimated).getTime() : scheduled;
+      return effective + 60000 > now;
+    })
+    .slice(0, 3);
+
   return (
     <div className="board">
       <div className="board-head">
@@ -144,8 +154,14 @@ function Board({ data }) {
         <span className="col platform">Plat</span>
         <span className="col countdown">Depart</span>
       </div>
-      {data.services.length === 0 && <div className="empty">No departures found.</div>}
-      {data.services.map((departure, i) => (
+      {upcoming.length === 0 && (
+        <div className="empty">
+          No upcoming trains to {callsAt} within the next few hours.
+          <br />
+          Service may have ended for the night.
+        </div>
+      )}
+      {upcoming.map((departure, i) => (
         <Row key={departure.rid} departure={departure} index={i} callsAt={callsAt} />
       ))}
     </div>
@@ -171,7 +187,9 @@ export default function App() {
           <span className="arrow"> → </span>
           <span className="h1b">{names[1]}</span>
         </h1>
-        <p className="sub">Next 3 departures · South Western Railway</p>
+        <p className="sub">
+          Next 3 departures · South Western Railway · data refreshes every 30 min
+        </p>
         <button className="swap" onClick={swap}>
           <span aria-hidden="true">⇄</span> Swap direction
         </button>
@@ -189,7 +207,7 @@ export default function App() {
       {board && <Board key={direction} data={board} />}
 
       <footer>
-        {updatedAt ? `Auto-refreshes every 30s · Last check ${updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}
+        {updatedAt ? `Board refreshes every 30s · Data updated by GitHub Actions every 30 min · Last check ${updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}
       </footer>
     </div>
   );

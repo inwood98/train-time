@@ -13,7 +13,7 @@ const ROUTES = [
 const dirs = {};
 for (const route of ROUTES) {
   process.stdout.write(`Fetching ${route.from} -> ${route.to}... `);
-  dirs[route.key] = await collectDepartures(route.from, route.to, 3);
+  dirs[route.key] = await collectDepartures(route.from, route.to, 10);
   console.log(`got ${dirs[route.key].services.length} services`);
 }
 
