@@ -160,18 +160,17 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
   const [panel, setPanel] = useState(null); // null | 'time' | 'dest'
   const services = sortByTime(data.services);
   const now = Date.now();
+  const nowHour = new Date(now).getHours();
 
   const hours = [...new Set(services.map((s) => new Date(s.scheduled).getHours()))].sort((a, b) => a - b);
   const destinations = [...new Set(services.map((s) => s.destination).filter(Boolean))].sort();
   const last = services[services.length - 1] ?? null;
 
-  const alreadyDeparted = (s) => effectiveTime(s) + 60000 < now;
-
   let base;
   if (jumpHour !== null) {
     base = services.filter((s) => new Date(s.scheduled).getHours() === jumpHour);
   } else {
-    base = services.filter((s) => !alreadyDeparted(s));
+    base = services.filter((s) => new Date(s.scheduled).getHours() === nowHour);
   }
   let list = destFilter ? base.filter((s) => s.destination === destFilter) : base;
   const MAX_ROWS = 200;
@@ -279,7 +278,7 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
         <div className="rowcount">
           {list.length} departure{list.length === 1 ? "" : "s"}
           {truncated ? ` (first ${MAX_ROWS} shown)` : ""}
-          {jumpHour !== null ? ` · ${two(jumpHour)}:00–${two(jumpHour + 1)}:00` : " · rest of day"}
+          {jumpHour !== null ? ` · ${two(jumpHour)}:00–${two(jumpHour + 1)}:00` : ` · ${two(nowHour)}:00–${two(nowHour + 1)}:00`}
         </div>
       )}
 
@@ -287,7 +286,7 @@ function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter 
         <div className="empty">
           {jumpHour !== null
             ? `No ${destFilter ? destFilter + " " : ""}trains in the ${two(jumpHour)}:00 hour.`
-            : `No upcoming trains to ${toName} in the next few hours. Service may have ended for the night.`}
+            : `No trains in the ${two(nowHour)}:00 hour. Service may have ended for the night.`}
         </div>
       )}
 
