@@ -287,6 +287,94 @@ header h1 .arrow {
   border-color: var(--accent);
 }
 
+.chev-exp {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 0.15s ease, color 0.15s ease;
+  flex: none;
+}
+
+.chev-exp.open {
+  transform: rotate(90deg);
+  color: var(--accent);
+}
+
+.stops {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 20px 14px 32px;
+  border-bottom: 1px solid #1a2924;
+  background: rgba(255, 255, 255, 0.015);
+  animation: stops-in 0.2s ease-out;
+}
+
+@keyframes stops-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.stops-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.stop {
+  display: grid;
+  grid-template-columns: 18px 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  position: relative;
+}
+
+.stop:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 7px;
+  top: 18px;
+  height: calc(100% + 2px);
+  width: 2px;
+  background: var(--line);
+  z-index: 0;
+}
+
+.stop-line {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #101816;
+  border: 2px solid var(--line);
+  z-index: 1;
+}
+
+.stop.current .stop-line {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.stop-name {
+  font-weight: 600;
+}
+
+.stop-kind {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.stop-time {
+  color: var(--text);
+  font-size: 13px;
+  text-align: right;
+}
+
+.stops-note {
+  color: var(--muted);
+  font-size: 12px;
+  font-style: italic;
+}
+
 .row.due .countdown {
   color: var(--accent);
   font-weight: 800;
@@ -442,12 +530,22 @@ header h1 .arrow {
   border-bottom: 1px solid #1a2924;
 }
 
-.row:last-child {
-  border-bottom: none;
-}
-
 .row:hover {
   background: rgba(255, 255, 255, 0.02);
+}
+
+.row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.train.open > .row {
+  background: rgba(40, 208, 138, 0.045);
+  box-shadow: inset 0 1px 0 rgba(40, 208, 138, 0.25);
+}
+
+.train:last-child > .row {
+  border-bottom: none;
 }
 
 .cell.num {
@@ -682,6 +780,19 @@ footer {
   .badge.fastest {
     margin-left: 6px;
     font-size: 9px;
+  }
+
+  .stops {
+    padding: 10px 12px 12px 20px;
+    gap: 9px;
+  }
+
+  .stop {
+    grid-template-columns: 18px 1fr auto;
+  }
+
+  .stop-kind {
+    font-size: 11px;
   }
 }
 

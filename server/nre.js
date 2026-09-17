@@ -193,6 +193,9 @@ function normalize(board) {
     operator: s.operator?.name ?? null,
     filterArrivalScheduled: s.journeyDetails?.arrivalInfo?.scheduled ?? null,
     filterArrival: s.journeyDetails?.arrivalInfo?.estimated ?? s.journeyDetails?.arrivalInfo?.scheduled ?? null,
+    intermediateStops: s.journeyDetails?.stops ?? null,
+    fromIsFirstStop: s.journeyDetails?.from?.isFirstStop ?? false,
+    toIsLastStop: s.journeyDetails?.to?.isLastStop ?? false,
   }));
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 const REFRESH_MS = 30000;
 const ALARM_KEY = "swr-trains-alarms";
@@ -181,7 +181,7 @@ function showNotification(title, body) {
   return false;
 }
 
-function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm }) {
+function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm, expanded, onToggle }) {
   const st = statusOf(departure);
   const scheduled = hhmm(departure.scheduled);
   const estimated = hhmm(departure.estimated);
@@ -209,7 +209,19 @@ function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm }) {
   }, [due]);
 
   return (
-    <div className={`row ${st.className}${due ? " due" : ""}${flash ? " flash" : ""}`}>
+    <div
+      className={`row ${st.className}${due ? " due" : ""}${flash ? " flash" : ""}`}
+      onClick={onToggle}
+      role="button"
+      aria-expanded={expanded}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+    >
       <div className="cell num">{index + 1}</div>
       <div className="cell time">
         <span className="mono time-main">{scheduled}</span>
@@ -233,7 +245,10 @@ function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm }) {
         {!departure.cancelled && <span className="mono countdown">{countdown}</span>}
         <button
           className={`alarm${alarmed ? " on" : ""}`}
-          onClick={onToggleAlarm}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleAlarm();
+          }}
           aria-pressed={alarmed}
           title={alarmed ? "Remove alarm" : "Set an alarm for this train"}
         >
@@ -242,6 +257,7 @@ function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm }) {
             <path d="M13.73 21a2 2 0 0 1-3.46 0" />
           </svg>
         </button>
+        <span className={`chev-exp${expanded ? " open" : ""}`} aria-hidden="true">▸</span>
       </div>
     </div>
   );
@@ -260,6 +276,72 @@ function Picker({ open, children }) {
   return <div className="picker">{children({ Chip })}</div>;
 }
 
+function buildStops(s, fromCrs, toCrs, fromObj, toObj, ridCache) {
+  const fromName = fromObj?.locationName ?? fromCrs;
+  const toName = toObj?.locationName ?? toCrs;
+  const toArrMs = s.filterArrival ? new Date(s.filterArrival).getTime() : -Infinity;
+
+  const head = [];
+  if (s.origin && s.origin !== fromName) head.push({ name: s.origin, kind: "origin", time: null });
+
+  const body = [
+    { name: fromName, kind: s.fromIsFirstStop ? "departs · first stop" : "departs", time: s.scheduled, current: true },
+  ];
+  if (s.filterArrival) {
+    body.push({ name: toName, kind: s.toIsLastStop ? "arrives · last stop" : "arrives", time: s.filterArrival });
+  }
+
+  const served = ridCache?.get(s.rid);
+  if (served) {
+    for (const st of STATIONS) {
+      if (st.crs === fromCrs || st.crs === toCrs) continue;
+      const info = served.get(st.crs);
+      if (info?.arrival && new Date(info.arrival).getTime() >= toArrMs) {
+        body.push({ name: st.name, kind: info.lastStop ? "arrives · last stop" : "arrives", time: info.arrival });
+      }
+    }
+  }
+
+  body.sort(
+    (a, b) => (a.time ? new Date(a.time).getTime() : 0) - (b.time ? new Date(b.time).getTime() : 0)
+  );
+
+  const tail = [];
+  if (
+    s.destination &&
+    s.destination !== fromName &&
+    s.destination !== toName &&
+    !body.some((x) => x.name === s.destination)
+  ) {
+    tail.push({ name: s.destination, kind: "terminates" });
+  }
+
+  return [...head, ...body, ...tail];
+}
+
+function StopsPanel({ service, fromCrs, toCrs, from, to, ridCache }) {
+  const stops = buildStops(service, fromCrs, toCrs, from, to, ridCache);
+  return (
+    <div className="stops">
+      <div className="stops-title">Calling at</div>
+      {stops.map((st, i) => (
+        <div className={`stop${st.current ? " current" : ""}`} key={`${st.name}-${i}`}>
+          <span className="stop-line" />
+          <span className="stop-name">{st.name}</span>
+          <span className="stop-kind">{st.kind}</span>
+          {st.time && <span className="stop-time mono">{hhmm(st.time)}</span>}
+        </div>
+      ))}
+      {typeof service.intermediateStops === "number" && service.intermediateStops > 0 && (
+        <div className="stops-note">
+          … plus {service.intermediateStops} further stop{service.intermediateStops === 1 ? "" : "s"} between{" "}
+          {from?.locationName} and {to?.locationName}.
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Board({
   data,
   toName,
@@ -271,9 +353,11 @@ function Board({
   setArriveBy,
   alarms,
   toggleAlarm,
+  ridCache,
 }) {
   const [panel, setPanel] = useState(null); // null | 'time' | 'dest' | 'arrive'
   const [draft, setDraft] = useState("");
+  const [expandedRid, setExpandedRid] = useState(null);
   const services = sortByTime(data.services);
   const now = Date.now();
   const nowHour = new Date(now).getHours();
@@ -477,15 +561,28 @@ function Board({
       )}
 
       {list.map((departure, i) => (
-        <Row
-          key={departure.rid}
-          departure={departure}
-          index={i}
-          toName={toName}
-          fastest={showFastest && legs[i] !== null && legs[i] >= 0 && legs[i] === minLeg}
-          alarmed={alarms.some((a) => a.rid === departure.rid)}
-          onToggleAlarm={() => toggleAlarm(departure)}
-        />
+        <div key={departure.rid} className={`train${expandedRid === departure.rid ? " open" : ""}`}>
+          <Row
+            departure={departure}
+            index={i}
+            toName={toName}
+            fastest={showFastest && legs[i] !== null && legs[i] >= 0 && legs[i] === minLeg}
+            alarmed={alarms.some((a) => a.rid === departure.rid)}
+            onToggleAlarm={() => toggleAlarm(departure)}
+            expanded={expandedRid === departure.rid}
+            onToggle={() => setExpandedRid((cur) => (cur === departure.rid ? null : departure.rid))}
+          />
+          {expandedRid === departure.rid && (
+            <StopsPanel
+              service={departure}
+              fromCrs={data.departureStation?.crs}
+              toCrs={data.filterStation?.crs}
+              from={data.departureStation}
+              to={data.filterStation}
+              ridCache={ridCache}
+            />
+          )}
+        </div>
       ))}
     </div>
   );
@@ -524,6 +621,26 @@ export default function App() {
   const from = STATIONS.find((s) => s.crs === fromCrs) ?? STATIONS[0];
   const to = STATIONS.find((s) => s.crs === toCrs) ?? STATIONS[1];
   const board = boards?.[`${from.crs}:${to.crs}`] ?? null;
+
+  const ridCache = useMemo(() => {
+    const cache = new Map();
+    for (const [pairKey, pairBoard] of Object.entries(boards ?? {})) {
+      const toCrs = pairKey.split(":")[1];
+      for (const s of pairBoard?.services ?? []) {
+        if (!s.rid) continue;
+        let byRid = cache.get(s.rid);
+        if (!byRid) {
+          byRid = new Map();
+          cache.set(s.rid, byRid);
+        }
+        const existing = byRid.get(toCrs);
+        if (!existing || (s.filterArrival && (!existing.arrival || new Date(s.filterArrival) < new Date(existing.arrival)))) {
+          byRid.set(toCrs, { arrival: s.filterArrival ?? null, lastStop: !!s.toIsLastStop });
+        }
+      }
+    }
+    return cache;
+  }, [boards]);
 
   const alarmsRef = useRef(alarms);
   alarmsRef.current = alarms;
@@ -758,6 +875,7 @@ export default function App() {
           setArriveBy={setArriveBy}
           alarms={alarms}
           toggleAlarm={toggleAlarm}
+          ridCache={ridCache}
         />
       )}
 
