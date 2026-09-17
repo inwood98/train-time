@@ -151,9 +151,9 @@ function Chip({ active, onClick, children }) {
   );
 }
 
-function Picker({ open, onPick }) {
+function Picker({ open, children }) {
   if (!open) return null;
-  return <div className="picker">{onPick({ Chip })}</div>;
+  return <div className="picker">{children({ Chip })}</div>;
 }
 
 function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter }) {
