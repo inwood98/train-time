@@ -90,6 +90,72 @@ header h1 .arrow {
   background: linear-gradient(180deg, #14201c, #0f1715);
 }
 
+.last {
+  padding: 10px 20px;
+  font-size: 13px;
+  color: var(--warn);
+  border-bottom: 1px solid var(--line);
+  background: rgba(245, 185, 66, 0.06);
+}
+
+.last .mono {
+  font-size: 14px;
+}
+
+.chips {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.chips.filters {
+  padding-top: 0;
+  padding-bottom: 12px;
+}
+
+.chip-btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chip-btn:hover {
+  color: var(--text);
+  border-color: rgba(40, 208, 138, 0.4);
+}
+
+.chip-btn.active {
+  color: #06251a;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.badge.fastest {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  color: #06251a;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.calls .arrive {
+  color: var(--accent);
+}
+
 .route {
   display: flex;
   align-items: baseline;

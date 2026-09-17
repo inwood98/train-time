@@ -191,6 +191,8 @@ function normalize(board) {
     status: s.status?.status ?? "Unknown",
     cancelled: !!s.isCancelled,
     operator: s.operator?.name ?? null,
+    filterArrivalScheduled: s.journeyDetails?.arrivalInfo?.scheduled ?? null,
+    filterArrival: s.journeyDetails?.arrivalInfo?.estimated ?? s.journeyDetails?.arrivalInfo?.scheduled ?? null,
   }));
 }
 
@@ -220,5 +222,53 @@ export async function collectDepartures(crs, toCrs, count) {
     departureStation: pages[0]?.departureStation ?? null,
     filterStation: pages[0]?.filterStation ?? null,
     services: normalize({ services }).slice(0, count),
+  };
+}
+
+export async function collectDay(crs, toCrs, cap = 90, maxPages = 18) {
+  const collected = [];
+  const seen = new Set();
+  let stationInfo = null;
+  let time = new Date().toJSON();
+  let emptyStrikes = 0;
+  let prevTime = null;
+
+  for (let i = 0; i < maxPages && collected.length < cap; i++) {
+    const board = await fetchBoard(crs, toCrs, time);
+    const row = board ?? { departureStation: null, filterStation: null, services: [] };
+    stationInfo = stationInfo ?? row;
+
+    const rows = row.services ?? [];
+    for (const s of rows) {
+      if (!seen.has(s.rid)) {
+        seen.add(s.rid);
+        collected.push(s);
+      }
+    }
+
+    const times = rows.map((r) => r.departureInfo?.scheduled).filter(Boolean).sort();
+    const last = times[times.length - 1];
+
+    if (!last) {
+      emptyStrikes++;
+      if (emptyStrikes > 3) break; // gap between last train and next morning's service
+      const jump = new Date(new Date(time).getTime() + 2 * 3600000);
+      if (jump - new Date() > 18 * 3600000) break; // sanity: don't probe past the day
+      time = jump.toJSON();
+      continue;
+    }
+
+    emptyStrikes = 0;
+    const next = new Date(new Date(last).getTime() + 60000).toJSON();
+    if (next === prevTime) break; // no forward progress
+    prevTime = next;
+    time = next;
+  }
+
+  return {
+    generatedAt: stationInfo?.generatedAt ?? null,
+    departureStation: stationInfo?.departureStation ?? null,
+    filterStation: stationInfo?.filterStation ?? null,
+    services: normalize({ services: collected }),
   };
 }

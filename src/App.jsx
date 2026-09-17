@@ -12,10 +12,16 @@ function hhmm(iso) {
   return `${two(d.getHours())}:${two(d.getMinutes())}`;
 }
 
-function minsUntil(iso) {
-  if (!iso) return null;
-  const ms = new Date(iso).getTime() - Date.now();
-  return Math.round(ms / 60000);
+function effectiveTime(s) {
+  if (s.estimated) return new Date(s.estimated).getTime();
+  return s.scheduled ? new Date(s.scheduled).getTime() : NaN;
+}
+
+function fmtCountdown(ms) {
+  const mins = Math.round(ms / 60000);
+  if (mins <= 0) return "due";
+  if (mins < 60) return `${mins}m`;
+  return `${Math.floor(mins / 60)}h ${two(mins % 60)}m`;
 }
 
 function statusOf(s) {
@@ -41,7 +47,7 @@ async function loadApiFallback() {
   const [out, back] = await Promise.all(
     ["out", "back"].map(async (key) => {
       const { from, to } = DIRECTIONS[key];
-      const res = await fetch(`/api/departures?from=${from}&to=${to}&count=3`);
+      const res = await fetch(`/api/departures?from=${from}&to=${to}&count=90`);
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
       return res.json();
     })
@@ -86,15 +92,21 @@ function useBoards() {
   return state;
 }
 
-function Row({ departure, index, callsAt }) {
+function sortByTime(services) {
+  return [...(services ?? [])].sort(
+    (a, b) => new Date(a.scheduled).getTime() - new Date(b.scheduled).getTime()
+  );
+}
+
+function Row({ departure, index, callsAt, showArrival, fastest }) {
   const st = statusOf(departure);
   const scheduled = hhmm(departure.scheduled);
   const estimated = hhmm(departure.estimated);
   const delayed =
     departure.estimated &&
     departure.scheduled &&
-    new Date(departure.estimated).getTime() !== new Date(departure.scheduled).getTime();
-  const countdown = minsUntil(delayed ? departure.estimated : departure.scheduled);
+    effectiveTime(departure) !== new Date(departure.scheduled).getTime();
+  const countdown = fmtCountdown(effectiveTime(departure) - Date.now());
 
   return (
     <div className={`row ${st.className}`}>
@@ -104,8 +116,16 @@ function Row({ departure, index, callsAt }) {
         {delayed && <span className="est mono">est {estimated}</span>}
       </div>
       <div className="cell to">
-        <span className="dest">{departure.destination}</span>
-        <span className="calls">calls at {callsAt}</span>
+        <span className="dest">
+          {departure.destination}
+          {fastest && <span className="badge fastest">fastest</span>}
+        </span>
+        <span className="calls">
+          calls at {callsAt}
+          {showArrival && departure.filterArrival && (
+            <span className="arrive"> · arrives {hhmm(departure.filterArrival)}</span>
+          )}
+        </span>
       </div>
       <div className="cell status">
         <span className={`chip ${st.className}`}>{st.label}</span>
@@ -114,25 +134,46 @@ function Row({ departure, index, callsAt }) {
         {departure.platform ? <span className="mono">{departure.platform}</span> : "—"}
       </div>
       <div className="cell countdown">
-        {countdown !== null && !departure.cancelled && (
-          <span className="mono">{countdown <= 0 ? "due" : `${countdown}m`}</span>
-        )}
+        {!departure.cancelled && <span className="mono">{countdown}</span>}
       </div>
     </div>
   );
 }
 
-function Board({ data }) {
-  const callsAt = data.filterStation?.locationName ?? data.departureStation?.locationName;
+function Chip({ active, onClick, children }) {
+  return (
+    <button className={`chip-btn${active ? " active" : ""}`} onClick={onClick}>
+      {children}
+    </button>
+  );
+}
 
+function Board({ data, direction, jumpHour, setJumpHour, destFilter, setDestFilter }) {
+  const services = sortByTime(data.services);
+  const callsAt = data.filterStation?.locationName ?? data.departureStation?.locationName;
   const now = Date.now();
-  const upcoming = (data.services ?? [])
-    .filter((s) => {
-      const scheduled = s.scheduled ? new Date(s.scheduled).getTime() : NaN;
-      const effective = s.estimated ? new Date(s.estimated).getTime() : scheduled;
-      return effective + 60000 > now;
-    })
-    .slice(0, 3);
+
+  const hours = [...new Set(services.map((s) => new Date(s.scheduled).getHours()))].sort((a, b) => a - b);
+  const destinations = [...new Set(services.map((s) => s.destination).filter(Boolean))].sort();
+  const last = services[services.length - 1] ?? null;
+
+  const alreadyDeparted = (s) => effectiveTime(s) + 60000 < now;
+
+  let base;
+  if (jumpHour !== null) {
+    const hourServices = services.filter((s) => new Date(s.scheduled).getHours() === jumpHour);
+    const firstAtHour = hourServices.length ? hourServices[0] : null;
+    base = firstAtHour
+      ? services.filter((s) => new Date(s.scheduled).getTime() >= new Date(firstAtHour.scheduled).getTime())
+      : [];
+  } else {
+    base = services.filter((s) => !alreadyDeparted(s));
+  }
+  let list = destFilter ? base.filter((s) => s.destination === destFilter) : base;
+  list = list.slice(0, 3);
+
+  const legs = list.map((s) => (s.filterArrival ? new Date(s.filterArrival).getTime() - effectiveTime(s) : null));
+  const minLeg = legs.length ? Math.min(...legs.filter((l) => l !== null && l >= 0)) : null;
 
   return (
     <div className="board">
@@ -146,6 +187,39 @@ function Board({ data }) {
           {data.generatedAt ? `Live board · updated ${hhmm(data.generatedAt)}` : "Departures"}
         </div>
       </div>
+
+      {last && (
+        <div className="last">
+          Last train tonight is <span className="mono">{hhmm(last.scheduled)}</span> → {last.destination}. Don't miss it!
+        </div>
+      )}
+
+      {hours.length > 1 && (
+        <div className="chips">
+          <Chip active={jumpHour === null} onClick={() => setJumpHour(null)}>
+            Now
+          </Chip>
+          {hours.map((h) => (
+            <Chip key={h} active={jumpHour === h} onClick={() => setJumpHour(h)}>
+              {two(h)}:00
+            </Chip>
+          ))}
+        </div>
+      )}
+
+      {destinations.length > 1 && (
+        <div className="chips filters">
+          <Chip active={destFilter === null} onClick={() => setDestFilter(null)}>
+            All trains
+          </Chip>
+          {destinations.map((d) => (
+            <Chip key={d} active={destFilter === d} onClick={() => setDestFilter(d)}>
+              {d}
+            </Chip>
+          ))}
+        </div>
+      )}
+
       <div className="cols">
         <span className="col num">#</span>
         <span className="col time">Time</span>
@@ -154,15 +228,24 @@ function Board({ data }) {
         <span className="col platform">Plat</span>
         <span className="col countdown">Depart</span>
       </div>
-      {upcoming.length === 0 && (
+
+      {list.length === 0 && (
         <div className="empty">
-          No upcoming trains to {callsAt} within the next few hours.
-          <br />
-          Service may have ended for the night.
+          {jumpHour !== null
+            ? `No ${destFilter ? destFilter + " " : ""}trains from ${two(jumpHour)}:00 onwards.`
+            : `No upcoming trains to ${callsAt} in the next few hours. Service may have ended for the night.`}
         </div>
       )}
-      {upcoming.map((departure, i) => (
-        <Row key={departure.rid} departure={departure} index={i} callsAt={callsAt} />
+
+      {list.map((departure, i) => (
+        <Row
+          key={departure.rid}
+          departure={departure}
+          index={i}
+          callsAt={callsAt}
+          showArrival={direction === "back"}
+          fastest={direction === "back" && minLeg !== null && legs[i] === minLeg && legs[i] >= 0}
+        />
       ))}
     </div>
   );
@@ -170,10 +253,16 @@ function Board({ data }) {
 
 export default function App() {
   const [direction, setDirection] = useState("out");
+  const [jumpHour, setJumpHour] = useState(null);
+  const [destFilter, setDestFilter] = useState(null);
   const { boards, loading, error, updatedAt } = useBoards();
   const board = boards?.[direction] ?? null;
 
-  const swap = () => setDirection((d) => (d === "out" ? "back" : "out"));
+  const swap = () => {
+    setDirection((d) => (d === "out" ? "back" : "out"));
+    setJumpHour(null);
+    setDestFilter(null);
+  };
 
   const names = board
     ? [board.departureStation?.locationName, board.filterStation?.locationName]
@@ -204,7 +293,17 @@ export default function App() {
         </div>
       )}
 
-      {board && <Board key={direction} data={board} />}
+      {board && (
+        <Board
+          key={direction}
+          data={board}
+          direction={direction}
+          jumpHour={jumpHour}
+          setJumpHour={setJumpHour}
+          destFilter={destFilter}
+          setDestFilter={setDestFilter}
+        />
+      )}
 
       <footer>
         {updatedAt ? `Board refreshes every 30s · Data updated by GitHub Actions every 30 min · Last check ${updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : ""}

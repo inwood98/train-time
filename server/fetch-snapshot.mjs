@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { collectDepartures } from "./nre.js";
+import { collectDay } from "./nre.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -13,7 +13,7 @@ const ROUTES = [
 const dirs = {};
 for (const route of ROUTES) {
   process.stdout.write(`Fetching ${route.from} -> ${route.to}... `);
-  dirs[route.key] = await collectDepartures(route.from, route.to, 10);
+  dirs[route.key] = await collectDay(route.from, route.to);
   console.log(`got ${dirs[route.key].services.length} services`);
 }
 
