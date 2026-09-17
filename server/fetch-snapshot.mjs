@@ -5,24 +5,33 @@ import { collectDay } from "./nre.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const ROUTES = [
-  { key: "out", from: "SNS", to: "TWI" },
-  { key: "back", from: "TWI", to: "SNS" },
+const STATIONS = [
+  { crs: "SNS", name: "Staines" },
+  { crs: "TWI", name: "Twickenham" },
+  { crs: "WAT", name: "London Waterloo" },
 ];
 
-const dirs = {};
-for (const route of ROUTES) {
-  process.stdout.write(`Fetching ${route.from} -> ${route.to}... `);
-  dirs[route.key] = await collectDay(route.from, route.to);
-  console.log(`got ${dirs[route.key].services.length} services`);
+const pairs = [];
+for (const a of STATIONS) {
+  for (const b of STATIONS) {
+    if (a.crs !== b.crs) pairs.push({ key: `${a.crs}:${b.crs}`, from: a.crs, to: b.crs });
+  }
 }
 
-const snapshot = {
-  generatedAt: new Date().toISOString(),
-  directions: dirs,
-};
+const results = await Promise.all(
+  pairs.map(async (p) => {
+    process.stdout.write(`Fetching ${p.from} -> ${p.to}... `);
+    const board = await collectDay(p.from, p.to);
+    console.log(`got ${board.services.length} services`);
+    return [p.key, board];
+  })
+);
+
+const directions = Object.fromEntries(results);
+const snapshot = { generatedAt: new Date().toISOString(), directions };
 
 const outPath = join(__dirname, "..", "public", "data", "departures.json");
 mkdirSync(dirname(outPath), { recursive: true });
-writeFileSync(outPath, JSON.stringify(snapshot, null, 2));
-console.log(`Snapshot written to ${outPath}`);
+writeFileSync(outPath, JSON.stringify(snapshot));
+console.log(`Snapshot written: ${Object.keys(directions).length} directions`);
+console.log(outPath);

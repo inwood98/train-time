@@ -225,7 +225,7 @@ export async function collectDepartures(crs, toCrs, count) {
   };
 }
 
-export async function collectDay(crs, toCrs, cap = 90, maxPages = 18) {
+export async function collectDay(crs, toCrs, cap = 200, maxPages = 26) {
   const collected = [];
   const seen = new Set();
   let stationInfo = null;

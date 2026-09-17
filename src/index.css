@@ -72,6 +72,46 @@ header h1 .arrow {
   transform: translateY(0);
 }
 
+.stations {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.station-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.station-field .s-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.station-field select {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.station-field select:focus {
+  outline: none;
+  border-color: rgba(40, 208, 138, 0.5);
+}
+
+.stations .swap {
+  margin-bottom: 0;
+}
+
 .board {
   background: var(--panel);
   border: 1px solid var(--line);

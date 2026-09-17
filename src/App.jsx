@@ -2,6 +2,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 const REFRESH_MS = 30000;
 
+const STATIONS = [
+  { crs: "SNS", name: "Staines" },
+  { crs: "TWI", name: "Twickenham" },
+  { crs: "WAT", name: "London Waterloo" },
+];
+
+const PAIRS = [];
+for (const a of STATIONS) {
+  for (const b of STATIONS) {
+    if (a.crs !== b.crs) PAIRS.push({ from: a.crs, to: b.crs });
+  }
+}
+
 function two(n) {
   return String(n).padStart(2, "0");
 }
@@ -32,11 +45,6 @@ function statusOf(s) {
   return { label: s.status || "—", className: "unknown" };
 }
 
-const DIRECTIONS = {
-  out: { from: "SNS", to: "TWI", fallbackName: ["Staines", "Twickenham"] },
-  back: { from: "TWI", to: "SNS", fallbackName: ["Twickenham", "Staines"] },
-};
-
 async function loadSnapshot() {
   const res = await fetch("data/departures.json");
   if (!res.ok) throw new Error(`Snapshot missing (${res.status})`);
@@ -44,15 +52,14 @@ async function loadSnapshot() {
 }
 
 async function loadApiFallback() {
-  const [out, back] = await Promise.all(
-    ["out", "back"].map(async (key) => {
-      const { from, to } = DIRECTIONS[key];
+  const entries = await Promise.all(
+    PAIRS.map(async ({ from, to }) => {
       const res = await fetch(`/api/departures?from=${from}&to=${to}&count=90`);
       if (!res.ok) throw new Error(`Request failed (${res.status})`);
-      return res.json();
+      return [`${from}:${to}`, await res.json()];
     })
   );
-  return { generatedAt: new Date().toISOString(), directions: { out, back } };
+  return { generatedAt: new Date().toISOString(), directions: Object.fromEntries(entries) };
 }
 
 function useBoards() {
@@ -98,7 +105,7 @@ function sortByTime(services) {
   );
 }
 
-function Row({ departure, index, callsAt, showArrival, fastest }) {
+function Row({ departure, index, toName, fastest }) {
   const st = statusOf(departure);
   const scheduled = hhmm(departure.scheduled);
   const estimated = hhmm(departure.estimated);
@@ -121,8 +128,8 @@ function Row({ departure, index, callsAt, showArrival, fastest }) {
           {fastest && <span className="badge fastest">fastest</span>}
         </span>
         <span className="calls">
-          calls at {callsAt}
-          {showArrival && departure.filterArrival && (
+          calls at {toName}
+          {departure.filterArrival && (
             <span className="arrive"> · arrives {hhmm(departure.filterArrival)}</span>
           )}
         </span>
@@ -148,9 +155,8 @@ function Chip({ active, onClick, children }) {
   );
 }
 
-function Board({ data, direction, jumpHour, setJumpHour, destFilter, setDestFilter }) {
+function Board({ data, toName, jumpHour, setJumpHour, destFilter, setDestFilter }) {
   const services = sortByTime(data.services);
-  const callsAt = data.filterStation?.locationName ?? data.departureStation?.locationName;
   const now = Date.now();
 
   const hours = [...new Set(services.map((s) => new Date(s.scheduled).getHours()))].sort((a, b) => a - b);
@@ -172,8 +178,12 @@ function Board({ data, direction, jumpHour, setJumpHour, destFilter, setDestFilt
   let list = destFilter ? base.filter((s) => s.destination === destFilter) : base;
   list = list.slice(0, 3);
 
-  const legs = list.map((s) => (s.filterArrival ? new Date(s.filterArrival).getTime() - effectiveTime(s) : null));
-  const minLeg = legs.length ? Math.min(...legs.filter((l) => l !== null && l >= 0)) : null;
+  const legs = list.map((s) =>
+    s.filterArrival ? new Date(s.filterArrival).getTime() - effectiveTime(s) : null
+  );
+  const validLegs = legs.filter((l) => l !== null && l >= 0);
+  const minLeg = validLegs.length ? Math.min(...validLegs) : null;
+  const showFastest = validLegs.length && new Set(validLegs.map((l) => Math.round(l / 60000))).size > 1;
 
   return (
     <div className="board">
@@ -190,7 +200,7 @@ function Board({ data, direction, jumpHour, setJumpHour, destFilter, setDestFilt
 
       {last && (
         <div className="last">
-          Last train tonight is <span className="mono">{hhmm(last.scheduled)}</span> → {last.destination}. Don't miss it!
+          Last train tonight is the <span className="mono">{hhmm(last.scheduled)}</span> → {last.destination}. Don't miss it!
         </div>
       )}
 
@@ -233,7 +243,7 @@ function Board({ data, direction, jumpHour, setJumpHour, destFilter, setDestFilt
         <div className="empty">
           {jumpHour !== null
             ? `No ${destFilter ? destFilter + " " : ""}trains from ${two(jumpHour)}:00 onwards.`
-            : `No upcoming trains to ${callsAt} in the next few hours. Service may have ended for the night.`}
+            : `No upcoming trains to ${toName} in the next few hours. Service may have ended for the night.`}
         </div>
       )}
 
@@ -242,46 +252,90 @@ function Board({ data, direction, jumpHour, setJumpHour, destFilter, setDestFilt
           key={departure.rid}
           departure={departure}
           index={i}
-          callsAt={callsAt}
-          showArrival={direction === "back"}
-          fastest={direction === "back" && minLeg !== null && legs[i] === minLeg && legs[i] >= 0}
+          toName={toName}
+          fastest={showFastest && legs[i] !== null && legs[i] >= 0 && legs[i] === minLeg}
         />
       ))}
     </div>
   );
 }
 
+function StationSelect({ label, value, exclude, onChange, options }) {
+  return (
+    <label className="station-field">
+      <span className="s-label">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)}>
+        {options
+          .filter((s) => s.crs !== exclude)
+          .map((s) => (
+            <option key={s.crs} value={s.crs}>
+              {s.name}
+            </option>
+          ))}
+      </select>
+    </label>
+  );
+}
+
 export default function App() {
-  const [direction, setDirection] = useState("out");
+  const [fromCrs, setFromCrs] = useState("SNS");
+  const [toCrs, setToCrs] = useState("TWI");
   const [jumpHour, setJumpHour] = useState(null);
   const [destFilter, setDestFilter] = useState(null);
   const { boards, loading, error, updatedAt } = useBoards();
-  const board = boards?.[direction] ?? null;
 
-  const swap = () => {
-    setDirection((d) => (d === "out" ? "back" : "out"));
+  const from = STATIONS.find((s) => s.crs === fromCrs) ?? STATIONS[0];
+  const to = STATIONS.find((s) => s.crs === toCrs) ?? STATIONS[1];
+  const board = boards?.[`${from.crs}:${to.crs}`] ?? null;
+
+  const pickFrom = (crs) => {
+    setFromCrs(crs);
     setJumpHour(null);
     setDestFilter(null);
   };
-
-  const names = board
-    ? [board.departureStation?.locationName, board.filterStation?.locationName]
-    : DIRECTIONS[direction].fallbackName;
+  const pickTo = (crs) => {
+    setToCrs(crs);
+    setJumpHour(null);
+    setDestFilter(null);
+  };
+  const swap = () => {
+    setFromCrs(toCrs);
+    setToCrs(fromCrs);
+    setJumpHour(null);
+    setDestFilter(null);
+  };
 
   return (
     <div className="app">
       <header>
         <h1>
-          <span className="h1a">{names[0]}</span>
+          <span className="h1a">{from.name}</span>
           <span className="arrow"> → </span>
-          <span className="h1b">{names[1]}</span>
+          <span className="h1b">{to.name}</span>
         </h1>
         <p className="sub">
           Next 3 departures · South Western Railway · data refreshes every 30 min
         </p>
-        <button className="swap" onClick={swap}>
-          <span aria-hidden="true">⇄</span> Swap direction
-        </button>
+
+        <div className="stations">
+          <StationSelect
+            label="From"
+            value={fromCrs}
+            exclude={toCrs}
+            onChange={pickFrom}
+            options={STATIONS}
+          />
+          <button className="swap" onClick={swap} aria-label="Swap direction">
+            <span aria-hidden="true">⇄</span>
+          </button>
+          <StationSelect
+            label="To"
+            value={toCrs}
+            exclude={fromCrs}
+            onChange={pickTo}
+            options={STATIONS}
+          />
+        </div>
       </header>
 
       {loading && !board && <div className="message">Loading live departures…</div>}
@@ -295,9 +349,9 @@ export default function App() {
 
       {board && (
         <Board
-          key={direction}
+          key={`${from.crs}:${to.crs}`}
           data={board}
-          direction={direction}
+          toName={to.name}
           jumpHour={jumpHour}
           setJumpHour={setJumpHour}
           destFilter={destFilter}
