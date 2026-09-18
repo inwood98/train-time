@@ -47,6 +47,13 @@ function fmtAgo(min) {
   return `${Math.floor(min / 60)}h ${two(min % 60)}m`;
 }
 
+function urgencyClass(ms) {
+  const m = Math.round(ms / 60000);
+  if (m <= 2) return "u-now";
+  if (m <= 5) return "u-soon";
+  return "u-ok";
+}
+
 function statusOf(s) {
   if (s.cancelled) return { label: "Cancelled", className: "cancelled" };
   if (s.status === "Late") return { label: "Late", className: "late" };
@@ -249,7 +256,7 @@ function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm, expand
       <div className="cell meta">
         <span className={`chip ${st.className}`}>{st.label}</span>
         <span className="plat mono">{departure.platform ? `Plat ${departure.platform}` : "—"}</span>
-        {!departure.cancelled && <span className="mono countdown">{countdown}</span>}
+        {!departure.cancelled && <span className={`mono countdown ${urgencyClass(durMs)}`}>{countdown}</span>}
         <button
           className={`alarm${alarmed ? " on" : ""}`}
           onClick={(e) => {
@@ -265,6 +272,56 @@ function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm, expand
           </svg>
         </button>
         <span className={`chev-exp${expanded ? " open" : ""}`} aria-hidden="true">▸</span>
+      </div>
+    </div>
+  );
+}
+
+function Hero({ departure, toName, alarmed, onToggleAlarm, now }) {
+  const st = statusOf(departure);
+  const scheduled = hhmm(departure.scheduled);
+  const estimated = hhmm(departure.estimated);
+  const delayed =
+    departure.estimated &&
+    departure.scheduled &&
+    effectiveTime(departure) !== new Date(departure.scheduled).getTime();
+  const ms = effectiveTime(departure) - now;
+  const u = urgencyClass(ms);
+
+  return (
+    <div className={`hero ${st.className} ${u}`}>
+      <div className="hero-main">
+        <div className="hero-eyebrow">Next train</div>
+        <div className="hero-dest">{departure.destination}</div>
+        <div className="hero-times">
+          <span className="mono hero-time">{scheduled}</span>
+          {delayed && <span className="mono hero-est">est {estimated}</span>}
+        </div>
+        <div className="hero-arrive">
+          {departure.filterArrival ? (
+            <>arrives {toName} <span className="mono">{hhmm(departure.filterArrival)}</span></>
+          ) : (
+            `calls at ${toName}`
+          )}
+        </div>
+      </div>
+      <div className="hero-side">
+        {!departure.cancelled && <div className={`mono hero-count ${u}`}>{fmtCountdown(ms)}</div>}
+        <div className="hero-meta">
+          <span className={`chip ${st.className}`}>{st.label}</span>
+          {departure.platform && <span className="mono hero-plat">Plat {departure.platform}</span>}
+        </div>
+        <button
+          className={`alarm${alarmed ? " on" : ""}`}
+          onClick={onToggleAlarm}
+          aria-pressed={alarmed}
+          title={alarmed ? "Remove alarm" : "Set an alarm for this train"}
+        >
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
+            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          </svg>
+        </button>
       </div>
     </div>
   );
@@ -633,6 +690,11 @@ export default function App() {
   const from = STATIONS.find((s) => s.crs === fromCrs) ?? STATIONS[0];
   const to = STATIONS.find((s) => s.crs === toCrs) ?? STATIONS[1];
   const board = boards?.[`${from.crs}:${to.crs}`] ?? null;
+  const now = Date.now();
+  const nextTrain =
+    sortByTime(board?.services ?? []).find(
+      (s) => !s.cancelled && effectiveTime(s) + 60000 > now
+    ) ?? null;
 
   const ridCache = useMemo(() => {
     const cache = new Map();
@@ -872,6 +934,16 @@ export default function App() {
           Could not load departures: {error}
           <button onClick={() => window.location.reload()}>Retry</button>
         </div>
+      )}
+
+      {board && nextTrain && (
+        <Hero
+          departure={nextTrain}
+          toName={to.name}
+          alarmed={alarms.some((a) => a.rid === nextTrain.rid)}
+          onToggleAlarm={() => toggleAlarm(nextTrain)}
+          now={now}
+        />
       )}
 
       {board && (
