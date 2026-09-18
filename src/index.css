@@ -505,6 +505,19 @@ header h1 .arrow {
   font-size: 12px;
 }
 
+.updated.stale {
+  color: var(--warn);
+  font-weight: 700;
+}
+
+.board-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .cols,
 .row {
   display: grid;

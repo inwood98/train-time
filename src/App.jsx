@@ -5,6 +5,7 @@ const ALARM_KEY = "swr-trains-alarms";
 const FIRED_KEY = "swr-trains-fired";
 const ALARM_AHEAD_MS = 10 * 60000;
 const MAX_ROWS = 200;
+const ROLLING_WINDOW_MS = 90 * 60000;
 
 const STATIONS = [
   { crs: "SNS", name: "Staines" },
@@ -39,6 +40,11 @@ function fmtCountdown(ms) {
   if (mins <= 0) return "due";
   if (mins < 60) return `${mins}m`;
   return `${Math.floor(mins / 60)}h ${two(mins % 60)}m`;
+}
+
+function fmtAgo(min) {
+  if (min < 60) return `${min} min`;
+  return `${Math.floor(min / 60)}h ${two(min % 60)}m`;
 }
 
 function statusOf(s) {
@@ -233,9 +239,10 @@ function Row({ departure, index, toName, fastest, alarmed, onToggleAlarm, expand
           {fastest && <span className="badge fastest">fastest</span>}
         </span>
         <span className="calls">
-          calls at {toName}
-          {departure.filterArrival && (
-            <span className="arrive"> · arrives {hhmm(departure.filterArrival)}</span>
+          {departure.filterArrival ? (
+            <>arrives <span className="arrive">{hhmm(departure.filterArrival)}</span></>
+          ) : (
+            `calls at ${toName}`
           )}
         </span>
       </div>
@@ -360,7 +367,9 @@ function Board({
   const [expandedRid, setExpandedRid] = useState(null);
   const services = sortByTime(data.services);
   const now = Date.now();
-  const nowHour = new Date(now).getHours();
+  const genMs = data.generatedAt ? new Date(data.generatedAt).getTime() : NaN;
+  const ageMin = Number.isFinite(genMs) ? Math.max(0, Math.round((now - genMs) / 60000)) : null;
+  const stale = ageMin !== null && ageMin > 5;
   const halfHour = hmFromMin(new Date(now).getHours() * 60 + new Date(now).getMinutes() + 30);
 
   const hours = [...new Set(services.map((s) => new Date(s.scheduled).getHours()))].sort((a, b) => a - b);
@@ -382,7 +391,10 @@ function Board({
   } else if (jumpHour !== null) {
     base = services.filter((s) => new Date(s.scheduled).getHours() === jumpHour);
   } else {
-    base = services.filter((s) => new Date(s.scheduled).getHours() === nowHour);
+    base = services.filter((s) => {
+      const t = effectiveTime(s);
+      return t + 60000 >= now && t <= now + ROLLING_WINDOW_MS;
+    });
   }
   let list = destFilter ? base.filter((s) => s.destination === destFilter) : base;
   const truncated = list.length > MAX_ROWS;
@@ -420,13 +432,13 @@ function Board({
   return (
     <div className="board">
       <div className="board-head">
-        <div className="route">
-          <span className="station">{data.departureStation?.locationName}</span>
-          <span className="arrow">→</span>
-          <span className="station">{data.filterStation?.locationName}</span>
-        </div>
-        <div className="updated">
-          {data.generatedAt ? `Live board · updated ${hhmm(data.generatedAt)}` : "Departures"}
+        <span className="board-title">Departures</span>
+        <div className={`updated${stale ? " stale" : ""}`}>
+          {data.generatedAt
+            ? stale
+              ? `Updated ${fmtAgo(ageMin)} ago`
+              : `Live board · updated ${hhmm(data.generatedAt)}`
+            : "Departures"}
         </div>
       </div>
 
@@ -546,7 +558,7 @@ function Board({
             ? ` · arrive by ${arriveBy}`
             : jumpHour !== null
               ? ` · ${two(jumpHour)}:00–${two(jumpHour + 1)}:00`
-              : ` · ${two(nowHour)}:00–${two(nowHour + 1)}:00`}
+              : ` · next 90 min`}
         </div>
       )}
 
@@ -556,7 +568,7 @@ function Board({
             ? `No ${destFilter ? destFilter + " " : ""}trains arrive by ${arriveBy}. Try a later time.`
             : jumpHour !== null
               ? `No ${destFilter ? destFilter + " " : ""}trains in the ${two(jumpHour)}:00 hour.`
-              : `No trains in the ${two(nowHour)}:00 hour. Service may have ended for the night.`}
+              : `No ${destFilter ? destFilter + " " : ""}trains in the next 90 minutes. Try a later hour, or check back soon.`}
         </div>
       )}
 
