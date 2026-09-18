@@ -29,7 +29,6 @@ body {
   margin: 0 auto;
   padding: max(32px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
 }
-}
 
 header h1 {
   margin: 0 0 4px;
@@ -788,7 +787,7 @@ footer {
   }
 
   .stop {
-    grid-template-columns: 18px 1fr auto;
+    grid-template-columns: 18px 1fr auto auto;
   }
 
   .stop-kind {
