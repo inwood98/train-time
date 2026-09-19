@@ -6,6 +6,7 @@ const FIRED_KEY = "swr-trains-fired";
 const ALARM_AHEAD_MS = 10 * 60000;
 const MAX_ROWS = 200;
 const ROLLING_WINDOW_MS = 90 * 60000;
+const PTR_REFRESH_OFFSET = 56;
 
 const STATIONS = [
   { crs: "SNS", name: "Staines" },
@@ -895,7 +896,15 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <>
+    <div
+      className="app"
+      style={{
+        transform: `translateY(${refreshing ? PTR_REFRESH_OFFSET : ptr}px)`,
+        transition: ptr > 0 && !refreshing ? "none" : "transform 0.28s ease",
+        willChange: "transform",
+      }}
+    >
       <header>
         <h1>
           <span className="h1a">{from.name}</span>
@@ -971,11 +980,12 @@ export default function App() {
           <span className={refreshing ? "spin" : ""}>⟳</span>
         </button>
       </footer>
+    </div>
 
       <div
         className={`ptr${ptr > 0 || refreshing ? " show" : ""}`}
         style={{
-          transform: `translateY(${refreshing ? 0 : ptr - 50}px)`,
+          transform: `translateY(${refreshing ? 8 : ptr - 50}px)`,
           opacity: refreshing ? 1 : Math.min(1, ptr / 70),
         }}
       >
@@ -983,6 +993,6 @@ export default function App() {
       </div>
 
       {toast && <div className="toast" key={toast.id}>{toast.msg}</div>}
-    </div>
+    </>
   );
 }
